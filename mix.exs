@@ -1,4 +1,4 @@
-defmodule Botkit.MixProject do
+defmodule BotKit.MixProject do
   use Mix.Project
 
   def project do

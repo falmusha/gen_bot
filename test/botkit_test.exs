@@ -1,8 +1,8 @@
 defmodule BotkitTest do
   use ExUnit.Case
-  doctest Botkit
+  doctest BotKit
 
   test "greets the world" do
-    assert Botkit.hello() == :world
+    assert BotKit.hello() == :world
   end
 end

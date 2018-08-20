@@ -1,4 +1,4 @@
-# Botkit
+# BotKit
 
 **TODO: Add description**
 
