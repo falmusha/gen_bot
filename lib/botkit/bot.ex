@@ -9,41 +9,26 @@ defmodule BotKit.Bot do
             when data: any
 
   @callback pipeline(String.t()) :: term
-  @callback config() :: term
 
   @default_convert_opts [skip_reply: false]
 
-  defmacro __using__([states: states] = _opts) when length(states) > 0 do
-    quote do
-      @behaviour BotKit.Bot
+  def start_link(module, args, options \\ []) do
+    options = process_options(module, options)
 
-      def config() do
-        [single: false, states: unquote(states)]
-      end
-    end
-  end
-
-  defmacro __using__([]) do
-    quote do
-      @behaviour BotKit.Bot
-      use BotKit.BotState, single: true
-
-      def config() do
-        [single: true, states: [__single__: __MODULE__]]
-      end
-    end
-  end
-
-  def start_link(module, args) do
     case module.init(args) do
-      {:ok, pdata} -> :gen_statem.start_link(__MODULE__, {module, pdata}, [])
+      {:ok, pdata} -> :gen_statem.start_link(__MODULE__, {module, {pdata, options}}, [])
     end
   end
 
   def callback_mode, do: [:handle_event_function, :state_enter]
 
-  def init({module, pdata}) do
-    {:ok, :__dormant__, %Chat{module: module, data: pdata, prev_state: :__dormant__}}
+  def init({module, {pdata, options}}) do
+    chat = %Chat{module: module, data: pdata, prev_state: :__dormant__, options: options}
+    {:ok, :__dormant__, chat}
+  end
+
+  def begin_chat(pid) do
+    :gen_statem.call(pid, :begin)
   end
 
   def say(pid, text) do
@@ -54,17 +39,22 @@ defmodule BotKit.Bot do
     :keep_state_and_data
   end
 
-  def handle_event(:enter, old_state, state, chat) do
+  def handle_event(:enter, _old_state, state, %Chat{} = chat) do
     state_module = get_state_module(chat, state)
-    chat = state_module.enter(chat)
 
-    if old_state == :__dormant__,
-      do: convert(chat, state, skip_reply: true),
-      else: convert(chat, state)
+    chat
+    |> state_module.enter()
+    |> convert(state)
+  end
+
+  def handle_event({:call, from}, :begin, :__dormant__, chat) do
+    next = Keyword.get(chat.options, :states) |> hd |> elem(0)
+    chat = %{chat | reply_pid: from}
+    {:next_state, next, chat}
   end
 
   def handle_event({:call, from}, {:say, text}, :__dormant__, chat) do
-    next = Keyword.get(chat.module.config(), :states) |> hd |> elem(0)
+    next = Keyword.get(chat.options, :states) |> hd |> elem(0)
     chat = %{chat | reply_pid: from}
     {:next_state, next, chat, {:next_event, {:call, from}, {:say, text}}}
   end
@@ -80,19 +70,59 @@ defmodule BotKit.Bot do
         state_module.state_pipeline(text)
       end
 
-    chat
-    |> state_module.on(detections)
-    |> convert(state)
+    try do
+      chat
+      |> state_module.on(detections)
+      |> reset_confused_count()
+      |> convert(state)
+    rescue
+      e in [FunctionClauseError] ->
+        case e do
+          %FunctionClauseError{function: :on, arity: 2} ->
+            chat = increment_confused_count(chat)
+
+            if function_exported?(state_module, :confused, 3) do
+              chat
+              |> state_module.confused(chat.confused_count, detections)
+              |> convert(state)
+            else
+              raise(e)
+            end
+
+          it ->
+            raise(it)
+        end
+    end
+  end
+
+  defp process_options(module, options) do
+    states =
+      if Keyword.has_key?(options, :states) do
+        options
+        |> Keyword.get(:states)
+        |> Enum.map(fn it ->
+          IO.inspect(it)
+
+          case it do
+            {_state, {_module, state_options}} = pair when is_list(state_options) -> pair
+            {state, module} -> {state, {module, []}}
+          end
+        end)
+      else
+        [__single__: {module, []}]
+      end
+
+    [confused_threshold: -1] |> Keyword.merge(options) |> Keyword.put(:states, states)
   end
 
   defp get_state_module(chat, state),
-    do: chat.module.config() |> Keyword.get(:states) |> Keyword.get(state)
+    do: chat.options |> Keyword.get(:states) |> Keyword.get(state) |> elem(0)
 
-  defp single_state?(chat),
-    do: chat.module.config() |> Keyword.get(:states) |> length() == 1
+  defp single_state?(%Chat{options: [states: states]}) when length(states) > 1, do: false
+  defp single_state?(_), do: true
 
   defp state_pipeline?(state_module),
-    do: :erlang.function_exported(state_module, :state_pipeline, 1)
+    do: function_exported?(state_module, :state_pipeline, 1)
 
   defp convert(%Chat{} = chat, state, opts \\ @default_convert_opts) do
     actions = []
@@ -129,4 +159,9 @@ defmodule BotKit.Bot do
       [{:reply, from, Enum.reverse(replies)} | actions]
     end
   end
+
+  defp increment_confused_count(%Chat{confused_count: count} = chat),
+    do: %{chat | confused_count: count + 1}
+
+  defp reset_confused_count(%Chat{} = chat), do: %{chat | confused_count: 0}
 end
