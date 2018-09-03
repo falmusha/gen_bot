@@ -10,8 +10,6 @@ defmodule BotKit.Bot do
 
   @callback pipeline(String.t()) :: term
 
-  @default_convert_opts [skip_reply: false]
-
   def start_link(module, args, options \\ []) do
     options = process_options(module, options)
 
@@ -101,8 +99,6 @@ defmodule BotKit.Bot do
         options
         |> Keyword.get(:states)
         |> Enum.map(fn it ->
-          IO.inspect(it)
-
           case it do
             {_state, {_module, state_options}} = pair when is_list(state_options) -> pair
             {state, module} -> {state, {module, []}}
@@ -112,7 +108,7 @@ defmodule BotKit.Bot do
         [__single__: {module, []}]
       end
 
-    [confused_threshold: -1] |> Keyword.merge(options) |> Keyword.put(:states, states)
+    Keyword.put(options, :states, states)
   end
 
   defp get_state_module(chat, state),
@@ -124,19 +120,14 @@ defmodule BotKit.Bot do
   defp state_pipeline?(state_module),
     do: function_exported?(state_module, :state_pipeline, 1)
 
-  defp convert(%Chat{} = chat, state, opts \\ @default_convert_opts) do
+  defp convert(%Chat{} = chat, state) do
     actions = []
 
     case chat.to do
       nil ->
-        if Keyword.get(opts, :skip_reply) do
-          chat = %{chat | to: nil}
-          {:keep_state, chat, actions}
-        else
-          actions = put_reply(actions, chat)
-          chat = %{chat | replies: [], to: nil, reply_pid: nil}
-          {:keep_state, chat, actions}
-        end
+        actions = put_reply(actions, chat)
+        chat = %{chat | replies: [], to: nil, reply_pid: nil}
+        {:keep_state, chat, actions}
 
       ^state ->
         chat = %{chat | to: nil, prev_state: state}
