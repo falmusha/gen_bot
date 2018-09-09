@@ -25,11 +25,11 @@ defmodule BotKit.Bot do
     {:ok, :__dormant__, chat}
   end
 
-  def begin_chat(pid) do
+  def begin(pid) do
     :gen_statem.call(pid, :begin)
   end
 
-  def say(pid, text) do
+  def send(pid, text) do
     :gen_statem.call(pid, {:say, text})
   end
 
@@ -40,9 +40,14 @@ defmodule BotKit.Bot do
   def handle_event(:enter, _old_state, state, %Chat{} = chat) do
     state_module = get_state_module(chat, state)
 
-    chat
-    |> state_module.enter()
-    |> convert(state)
+
+    if function_exported?(state_module, :enter, 1) do
+      chat
+      |> state_module.enter()
+      |> convert(state)
+    else
+      convert(chat, state)
+    end
   end
 
   def handle_event({:call, from}, :begin, :__dormant__, chat) do
@@ -100,8 +105,12 @@ defmodule BotKit.Bot do
         |> Keyword.get(:states)
         |> Enum.map(fn it ->
           case it do
-            {_state, {_module, state_options}} = pair when is_list(state_options) -> pair
-            {state, module} -> {state, {module, []}}
+            {_state, {_module, state_options}} = pair when is_list(state_options) ->
+              {:module, _} = Code.ensure_loaded(module)
+              pair
+            {state, module} ->
+              {:module, _} = Code.ensure_loaded(module)
+              {state, {module, []}}
           end
         end)
       else
