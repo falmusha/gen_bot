@@ -1,11 +1,9 @@
 # BotKit
 
-**TODO: Add description**
+This is the library used to build the chatbot in my (ElixirConf talk)[https://www.youtube.com/watch?v=GorU5oEbf-c]
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `botkit` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
@@ -15,7 +13,4 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/botkit](https://hexdocs.pm/botkit).
-
+This library is not yet available on hex, so no documentation yet. For examples, take a look at (BotKit examples)[https://github.com/falmusha/botkit_example]
