@@ -38,8 +38,8 @@ defmodule BotKit.Bot do
   end
 
   def handle_event(:enter, _old_state, state, %Chat{} = chat) do
+    chat = %{chat | event: :enter}
     state_module = get_state_module(chat, state)
-
 
     if function_exported?(state_module, :enter, 1) do
       chat
@@ -50,19 +50,26 @@ defmodule BotKit.Bot do
     end
   end
 
+  def handle_event(:timeout, {:next, next}, state, chat) do
+    convert(%{chat | event: :timeout, to: next}, state)
+  end
+
   def handle_event({:call, from}, :begin, :__dormant__, chat) do
+    chat = %{chat | event: :call}
     next = Keyword.get(chat.options, :states) |> hd |> elem(0)
     chat = %{chat | reply_pid: from}
     {:next_state, next, chat}
   end
 
   def handle_event({:call, from}, {:say, text}, :__dormant__, chat) do
+    chat = %{chat | event: :call}
     next = Keyword.get(chat.options, :states) |> hd |> elem(0)
     chat = %{chat | reply_pid: from}
     {:next_state, next, chat, {:next_event, {:call, from}, {:say, text}}}
   end
 
   def handle_event({:call, from}, {:say, text}, state, chat) do
+    chat = %{chat | event: :call}
     state_module = get_state_module(chat, state)
     chat = %{chat | reply_pid: from}
 
@@ -108,6 +115,7 @@ defmodule BotKit.Bot do
             {_state, {_module, state_options}} = pair when is_list(state_options) ->
               {:module, _} = Code.ensure_loaded(module)
               pair
+
             {state, module} ->
               {:module, _} = Code.ensure_loaded(module)
               {state, {module, []}}
@@ -129,20 +137,29 @@ defmodule BotKit.Bot do
   defp state_pipeline?(state_module),
     do: function_exported?(state_module, :state_pipeline, 1)
 
-  defp convert(%Chat{} = chat, state) do
+  defp convert(%Chat{pending: %{to: to, wait: false, replies: replies}} = chat, state) do
+    convert(%{chat | pending: nil, to: to, replies: chat.replies ++ replies}, state)
+  end
+
+  defp convert(%Chat{to: to, event: event} = chat, state) do
     actions = []
 
-    case chat.to do
-      nil ->
+    case {to, event} do
+      {nil, _} ->
         actions = put_reply(actions, chat)
         chat = %{chat | replies: [], to: nil, reply_pid: nil}
         {:keep_state, chat, actions}
 
-      ^state ->
+      {^state, _} ->
         chat = %{chat | to: nil, prev_state: state}
         {:repeat_state, chat, actions}
 
-      next ->
+      {next, :enter} ->
+        actions = actions ++ [{:timeout, 1, {:next, next}}]
+        chat = %{chat | to: nil, prev_state: state}
+        {:keep_state, chat, actions}
+
+      {next, _} ->
         chat = %{chat | to: nil, prev_state: state}
         {:next_state, next, chat, actions}
     end
