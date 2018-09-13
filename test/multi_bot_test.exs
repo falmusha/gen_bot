@@ -7,6 +7,7 @@ defmodule GenBot.MultiBotTest do
   @states [foo: FooStateMock, bar: BarStateMock, qux: QuxStateMock]
 
   setup :verify_on_exit!
+  setup :set_mox_global
 
   test "init/1 callback" do
     expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
@@ -20,7 +21,6 @@ defmodule GenBot.MultiBotTest do
       expect(FooStateMock, :enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
-      allow(FooStateMock, self(), bot)
       assert "hi" = GenBot.begin(bot)
     end
 
@@ -33,8 +33,6 @@ defmodule GenBot.MultiBotTest do
       |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
-      allow(MultiStateMock, self(), bot)
-      allow(FooStateMock, self(), bot)
       GenBot.begin(bot)
       assert "foobar" = GenBot.send(bot, "FOObAr")
     end
@@ -49,9 +47,6 @@ defmodule GenBot.MultiBotTest do
       expect(BarStateMock, :enter, fn bot -> Bot.reply_with(bot, "transfered") end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
-      allow(MultiStateMock, self(), bot)
-      allow(FooStateMock, self(), bot)
-      allow(BarStateMock, self(), bot)
 
       assert ["transfering", "transfered"] = GenBot.begin(bot)
     end
@@ -69,9 +64,6 @@ defmodule GenBot.MultiBotTest do
       expect(QuxStateMock, :enter, fn bot -> Bot.reply_with(bot, "injected") end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
-      allow(MultiStateMock, self(), bot)
-      allow(FooStateMock, self(), bot)
-      allow(QuxStateMock, self(), bot)
       GenBot.begin(bot)
 
       assert "injected" = GenBot.send(bot, "FOObAr")
@@ -94,10 +86,6 @@ defmodule GenBot.MultiBotTest do
       end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
-      allow(MultiStateMock, self(), bot)
-      allow(FooStateMock, self(), bot)
-      allow(BarStateMock, self(), bot)
-      allow(QuxStateMock, self(), bot)
       GenBot.begin(bot)
 
       assert ["foo", "qux", "bar"] = GenBot.send(bot, "anything")
@@ -113,8 +101,6 @@ defmodule GenBot.MultiBotTest do
       expect(FooStateMock, :enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
-      allow(FooStateMock, self(), bot)
-      allow(MultiStateMock, self(), bot)
       :ok = GenBot.begin_async(bot)
       assert_receive "hi"
     end
@@ -130,8 +116,6 @@ defmodule GenBot.MultiBotTest do
       |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
-      allow(MultiStateMock, self(), bot)
-      allow(FooStateMock, self(), bot)
 
       :ok = GenBot.begin_async(bot)
       :ok = GenBot.send_async(bot, "Hello")
@@ -151,9 +135,6 @@ defmodule GenBot.MultiBotTest do
       expect(BarStateMock, :enter, fn bot -> Bot.reply_with(bot, "transfered") end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
-      allow(MultiStateMock, self(), bot)
-      allow(FooStateMock, self(), bot)
-      allow(BarStateMock, self(), bot)
 
       :ok = GenBot.begin_async(bot)
 
@@ -175,9 +156,6 @@ defmodule GenBot.MultiBotTest do
       expect(QuxStateMock, :enter, fn bot -> Bot.reply_with(bot, "injected") end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
-      allow(MultiStateMock, self(), bot)
-      allow(FooStateMock, self(), bot)
-      allow(QuxStateMock, self(), bot)
 
       :ok = GenBot.begin_async(bot)
       :ok = GenBot.send_async(bot, "FOObAr")
@@ -204,10 +182,6 @@ defmodule GenBot.MultiBotTest do
       end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
-      allow(MultiStateMock, self(), bot)
-      allow(FooStateMock, self(), bot)
-      allow(BarStateMock, self(), bot)
-      allow(QuxStateMock, self(), bot)
 
       :ok = GenBot.begin_async(bot)
       :ok = GenBot.send_async(bot, "anything")

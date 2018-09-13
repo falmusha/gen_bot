@@ -5,6 +5,7 @@ defmodule GenBot.SingleBotTest do
   import Mox
 
   setup :verify_on_exit!
+  setup :set_mox_global
 
   test "init/1 callback" do
     expect(SingleStateMock, :init, fn :foobar -> {:ok, %{foo: :bar}} end)
@@ -19,7 +20,6 @@ defmodule GenBot.SingleBotTest do
       |> expect(:enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
       {:ok, bot} = GenBot.start_link(SingleStateMock, :ok)
-      allow(SingleStateMock, self(), bot)
       assert "hi" = GenBot.begin(bot)
     end
 
@@ -31,7 +31,6 @@ defmodule GenBot.SingleBotTest do
       |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
 
       {:ok, bot} = GenBot.start_link(SingleStateMock, :ok)
-      allow(SingleStateMock, self(), bot)
       GenBot.begin(bot)
       assert "foobar" = GenBot.send(bot, "FOObAr")
     end
@@ -45,7 +44,6 @@ defmodule GenBot.SingleBotTest do
       |> expect(:enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
       {:ok, bot} = GenBot.start_link(SingleStateMock, self())
-      allow(SingleStateMock, self(), bot)
       assert :ok = GenBot.begin_async(bot)
       assert_receive "hi"
     end
@@ -59,7 +57,6 @@ defmodule GenBot.SingleBotTest do
       |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
 
       {:ok, bot} = GenBot.start_link(SingleStateMock, self())
-      allow(SingleStateMock, self(), bot)
       :ok = GenBot.begin_async(bot)
       :ok = GenBot.send_async(bot, "FOOBAR")
       assert_receive "enter"

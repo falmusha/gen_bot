@@ -26,7 +26,7 @@ defmodule GenBot.Bot do
     do: %{bot | pending: %{pending | wait: false}}
 
   def reply_with(%__MODULE__{replies: replies} = bot, reply) when is_list(reply) do
-    %{bot | replies: [reply ++ replies]}
+    %{bot | replies: Enum.reverse(reply) ++ replies}
   end
 
   def reply_with(%__MODULE__{replies: replies} = bot, reply) when is_binary(reply) do

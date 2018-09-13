@@ -12,19 +12,28 @@ defmodule GenBot do
 
   @callback reply(Bot.t(), String.t()) :: term
 
-  def start_link(module, args, options \\ []) do
-    options = process_options(module, options)
+  def start(module, args, options \\ []) do
+    :gen_statem.start(__MODULE__, {module, args, options}, [])
+  end
 
-    case module.init(args) do
-      {:ok, pdata} -> :gen_statem.start_link(__MODULE__, {module, {pdata, options}}, [])
-    end
+  def start_link(module, args, options \\ []) do
+    :gen_statem.start_link(__MODULE__, {module, args, options}, [])
   end
 
   def callback_mode, do: [:handle_event_function, :state_enter]
 
-  def init({module, {pdata, options}}) do
+  def init({module, args, options}) do
+    options = process_options(module, options)
+
+    {pdata, initial_state} =
+      case module.init(args) do
+        {:ok, pdata} -> {pdata, :__dormant__}
+        {:ok, pdata, state} -> {pdata, state}
+      end
+
     bot = %Bot{module: module, data: pdata, prev_state: :__dormant__, options: options}
-    {:ok, :__dormant__, bot}
+
+    {:ok, initial_state, bot}
   end
 
   def begin(pid), do: :gen_statem.call(pid, :begin)
