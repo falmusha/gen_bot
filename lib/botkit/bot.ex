@@ -10,6 +10,8 @@ defmodule BotKit.Bot do
 
   @callback pipeline(String.t()) :: term
 
+  @callback reply(Chat.t(), String.t()) :: term
+
   def start_link(module, args, options \\ []) do
     options = process_options(module, options)
 
@@ -25,17 +27,15 @@ defmodule BotKit.Bot do
     {:ok, :__dormant__, chat}
   end
 
-  def begin(pid) do
-    :gen_statem.call(pid, :begin)
-  end
+  def begin(pid), do: :gen_statem.call(pid, :begin)
 
-  def send(pid, text) do
-    :gen_statem.call(pid, {:say, text})
-  end
+  def begin_async(pid), do: :gen_statem.cast(pid, :begin)
 
-  def handle_event(:enter, :__dormant__, :__dormant__, _chat) do
-    :keep_state_and_data
-  end
+  def send(pid, text), do: :gen_statem.call(pid, {:say, text})
+
+  def send_async(pid, text), do: :gen_statem.cast(pid, {:say, text})
+
+  def handle_event(:enter, :__dormant__, :__dormant__, _chat), do: :keep_state_and_data
 
   def handle_event(:enter, _old_state, state, %Chat{} = chat) do
     chat = %{chat | event: :enter}
@@ -54,24 +54,31 @@ defmodule BotKit.Bot do
     convert(%{chat | event: :timeout, to: next}, state)
   end
 
-  def handle_event({:call, from}, :begin, :__dormant__, chat) do
-    chat = %{chat | event: :call}
-    next = Keyword.get(chat.options, :states) |> hd |> elem(0)
-    chat = %{chat | reply_pid: from}
-    {:next_state, next, chat}
-  end
+  def handle_event(event_type, :begin, :__dormant__, chat) do
+    chat =
+      case event_type do
+        {:call, from} -> %{chat | event: :call, reply_pid: from}
+        :cast -> %{chat | event: :cast, reply_pid: nil}
+      end
 
-  def handle_event({:call, from}, {:say, text}, :__dormant__, chat) do
-    chat = %{chat | event: :call}
-    next = Keyword.get(chat.options, :states) |> hd |> elem(0)
-    chat = %{chat | reply_pid: from}
-    {:next_state, next, chat, {:next_event, {:call, from}, {:say, text}}}
+    {:next_state, Keyword.get(chat.options, :states) |> hd |> elem(0), chat}
   end
 
   def handle_event({:call, from}, {:say, text}, state, chat) do
-    chat = %{chat | event: :call}
+    handle_say(text, state, %{chat | event: :call, reply_pid: from})
+  end
+
+  def handle_event(:cast, {:say, text}, state, chat) do
+    handle_say(text, state, %{chat | event: :cast, reply_pid: nil})
+  end
+
+  defp handle_say(text, :__dormant__, chat) do
+    next = Keyword.get(chat.options, :states) |> hd |> elem(0)
+    {:next_state, next, chat, {:next_event, :cast, {:say, text}}}
+  end
+
+  defp handle_say(text, state, chat) do
     state_module = get_state_module(chat, state)
-    chat = %{chat | reply_pid: from}
 
     detections =
       if single_state?(chat) or not state_pipeline?(state_module) do
@@ -165,16 +172,25 @@ defmodule BotKit.Bot do
     end
   end
 
-  defp put_reply(actions, %Chat{replies: [], reply_pid: from}) do
-    [{:reply, from, nil} | actions]
+  defp put_reply(actions, %Chat{reply_pid: nil, replies: replies, module: module} = chat) do
+    case replies do
+      [] -> :ok
+      [reply] -> module.reply(chat, reply)
+      it -> module.reply(chat, Enum.reverse(it))
+    end
+
+    actions
   end
 
-  defp put_reply(actions, %Chat{replies: replies, reply_pid: from}) do
-    if length(replies) == 1 do
-      [{:reply, from, hd(replies)} | actions]
-    else
-      [{:reply, from, Enum.reverse(replies)} | actions]
-    end
+  defp put_reply(actions, %Chat{reply_pid: from, replies: replies}) do
+    reply =
+      case replies do
+        [] -> nil
+        [it] -> it
+        it -> Enum.reverse(it)
+      end
+
+    [{:reply, from, reply} | actions]
   end
 
   defp increment_confused_count(%Chat{confused_count: count} = chat),
