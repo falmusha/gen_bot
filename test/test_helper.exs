@@ -1,7 +1,7 @@
-Mox.defmock(BotKit.SingleMock, for: [BotKit.Bot, BotKit.BotState])
-Mox.defmock(BotKit.MultiMock, for: BotKit.Bot)
-Mox.defmock(BotKit.MultiFooStateMock, for: BotKit.BotState)
-Mox.defmock(BotKit.MultiBarStateMock, for: BotKit.BotState)
-Mox.defmock(BotKit.MultiQuxStateMock, for: BotKit.BotState)
+Mox.defmock(GenBot.SingleStateMock, for: [GenBot, GenBot.BotState])
+Mox.defmock(GenBot.MultiStateMock, for: GenBot)
+Mox.defmock(GenBot.FooStateMock, for: GenBot.BotState)
+Mox.defmock(GenBot.BarStateMock, for: GenBot.BotState)
+Mox.defmock(GenBot.QuxStateMock, for: GenBot.BotState)
 
 ExUnit.start()

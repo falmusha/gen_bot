@@ -1,225 +1,218 @@
-defmodule BotKit.MultiBotTest do
-  alias BotKit.{
-    Bot,
-    Chat,
-    MultiMock,
-    MultiFooStateMock,
-    MultiBarStateMock,
-    MultiQuxStateMock
-  }
+defmodule GenBot.MultiBotTest do
+  alias GenBot.{Bot, MultiStateMock, FooStateMock, BarStateMock, QuxStateMock}
 
   use ExUnit.Case
   import Mox
 
-  @states [foo: MultiFooStateMock, bar: MultiBarStateMock, qux: MultiQuxStateMock]
+  @states [foo: FooStateMock, bar: BarStateMock, qux: QuxStateMock]
 
   setup :verify_on_exit!
 
   test "init/1 callback" do
-    expect(MultiMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+    expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
 
-    assert {:ok, bot} = Bot.start_link(MultiMock, :ok, states: @states)
+    assert {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
   end
 
   describe "sync bot" do
-    test "begin_chat/1" do
-      expect(MultiMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
-      expect(MultiFooStateMock, :enter, fn chat -> Chat.reply_with(chat, "hi") end)
+    test "begin/1" do
+      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+      expect(FooStateMock, :enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, :ok, states: @states)
-      allow(MultiFooStateMock, self(), bot)
-      assert "hi" = Bot.begin(bot)
+      {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
+      allow(FooStateMock, self(), bot)
+      assert "hi" = GenBot.begin(bot)
     end
 
     test "state_pipeline/1, on/2" do
-      expect(MultiMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
 
-      MultiFooStateMock
-      |> expect(:enter, fn chat -> chat end)
-      |> expect(:on, fn chat, result -> Chat.reply_with(chat, result) end)
+      FooStateMock
+      |> expect(:enter, fn bot -> bot end)
+      |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
       |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, :ok, states: @states)
-      allow(MultiMock, self(), bot)
-      allow(MultiFooStateMock, self(), bot)
-      Bot.begin(bot)
-      assert "foobar" = Bot.send(bot, "FOObAr")
+      {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
+      allow(MultiStateMock, self(), bot)
+      allow(FooStateMock, self(), bot)
+      GenBot.begin(bot)
+      assert "foobar" = GenBot.send(bot, "FOObAr")
     end
 
-    test "Chat.goto/2 on enter" do
-      expect(MultiMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+    test "Bot.goto/2 on enter" do
+      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
 
-      expect(MultiFooStateMock, :enter, fn chat ->
-        chat |> Chat.reply_with("transfering") |> Chat.goto(:bar)
+      expect(FooStateMock, :enter, fn bot ->
+        bot |> Bot.reply_with("transfering") |> Bot.goto(:bar)
       end)
 
-      expect(MultiBarStateMock, :enter, fn chat -> Chat.reply_with(chat, "transfered") end)
+      expect(BarStateMock, :enter, fn bot -> Bot.reply_with(bot, "transfered") end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, :ok, states: @states)
-      allow(MultiMock, self(), bot)
-      allow(MultiFooStateMock, self(), bot)
-      allow(MultiBarStateMock, self(), bot)
+      {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
+      allow(MultiStateMock, self(), bot)
+      allow(FooStateMock, self(), bot)
+      allow(BarStateMock, self(), bot)
 
-      assert ["transfering", "transfered"] = Bot.begin(bot)
+      assert ["transfering", "transfered"] = GenBot.begin(bot)
     end
 
-    test "Chat.goto/2 when injecting intermediate state" do
-      expect(MultiMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+    test "Bot.goto/2 when injecting intermediate state" do
+      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
 
-      MultiFooStateMock
-      |> expect(:enter, fn chat -> chat end)
-      |> expect(:on, fn chat, result ->
-        chat |> Chat.reply_with(result) |> Chat.goto(:bar, inject: :qux)
-      end)
-      |> expect(:state_pipeline, fn result -> String.downcase(result) end)
-
-      expect(MultiQuxStateMock, :enter, fn chat -> Chat.reply_with(chat, "injected") end)
-
-      {:ok, bot} = Bot.start_link(MultiMock, :ok, states: @states)
-      allow(MultiMock, self(), bot)
-      allow(MultiFooStateMock, self(), bot)
-      allow(MultiQuxStateMock, self(), bot)
-      Bot.begin(bot)
-
-      assert "injected" = Bot.send(bot, "FOObAr")
-    end
-
-    test "Chat.goto/2 when injecting intermediate state and continue" do
-      expect(MultiMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
-
-      MultiFooStateMock
-      |> expect(:enter, fn chat -> chat end)
-      |> expect(:on, fn chat, _ ->
-        chat |> Chat.reply_with("foo") |> Chat.goto(:bar, inject: :qux)
+      FooStateMock
+      |> expect(:enter, fn bot -> bot end)
+      |> expect(:on, fn bot, result ->
+        bot |> Bot.reply_with(result) |> Bot.goto(:bar, inject: :qux)
       end)
       |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
-      expect(MultiBarStateMock, :enter, fn chat -> Chat.reply_with(chat, "bar") end)
+      expect(QuxStateMock, :enter, fn bot -> Bot.reply_with(bot, "injected") end)
 
-      expect(MultiQuxStateMock, :enter, fn chat ->
-        chat |> Chat.reply_with("qux") |> Chat.continue()
+      {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
+      allow(MultiStateMock, self(), bot)
+      allow(FooStateMock, self(), bot)
+      allow(QuxStateMock, self(), bot)
+      GenBot.begin(bot)
+
+      assert "injected" = GenBot.send(bot, "FOObAr")
+    end
+
+    test "Bot.goto/2 when injecting intermediate state and continue" do
+      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+
+      FooStateMock
+      |> expect(:enter, fn bot -> bot end)
+      |> expect(:on, fn bot, _ ->
+        bot |> Bot.reply_with("foo") |> Bot.goto(:bar, inject: :qux)
+      end)
+      |> expect(:state_pipeline, fn result -> String.downcase(result) end)
+
+      expect(BarStateMock, :enter, fn bot -> Bot.reply_with(bot, "bar") end)
+
+      expect(QuxStateMock, :enter, fn bot ->
+        bot |> Bot.reply_with("qux") |> Bot.continue()
       end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, :ok, states: @states)
-      allow(MultiMock, self(), bot)
-      allow(MultiFooStateMock, self(), bot)
-      allow(MultiBarStateMock, self(), bot)
-      allow(MultiQuxStateMock, self(), bot)
-      Bot.begin(bot)
+      {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
+      allow(MultiStateMock, self(), bot)
+      allow(FooStateMock, self(), bot)
+      allow(BarStateMock, self(), bot)
+      allow(QuxStateMock, self(), bot)
+      GenBot.begin(bot)
 
-      assert ["foo", "qux", "bar"] = Bot.send(bot, "anything")
+      assert ["foo", "qux", "bar"] = GenBot.send(bot, "anything")
     end
   end
 
   describe "async bot" do
-    test "begin_chat/1" do
-      MultiMock
+    test "begin/1" do
+      MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
-      |> expect(:reply, fn chat, message -> send(chat.data, message) end)
+      |> expect(:reply, fn bot, message -> send(bot.data, message) end)
 
-      expect(MultiFooStateMock, :enter, fn chat -> Chat.reply_with(chat, "hi") end)
+      expect(FooStateMock, :enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, self(), states: @states)
-      allow(MultiFooStateMock, self(), bot)
-      allow(MultiMock, self(), bot)
-      :ok = Bot.begin_async(bot)
+      {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
+      allow(FooStateMock, self(), bot)
+      allow(MultiStateMock, self(), bot)
+      :ok = GenBot.begin_async(bot)
       assert_receive "hi"
     end
 
     test "state_pipeline/1, on/2" do
-      MultiMock
+      MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
-      |> expect(:reply, fn chat, message -> send(chat.data, message) end)
+      |> expect(:reply, fn bot, message -> send(bot.data, message) end)
 
-      MultiFooStateMock
+      FooStateMock
       |> expect(:state_pipeline, fn result -> String.downcase(result) end)
-      |> expect(:enter, fn chat -> chat end)
-      |> expect(:on, fn chat, result -> Chat.reply_with(chat, result) end)
+      |> expect(:enter, fn bot -> bot end)
+      |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, self(), states: @states)
-      allow(MultiMock, self(), bot)
-      allow(MultiFooStateMock, self(), bot)
+      {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
+      allow(MultiStateMock, self(), bot)
+      allow(FooStateMock, self(), bot)
 
-      :ok = Bot.begin_async(bot)
-      :ok = Bot.send_async(bot, "Hello")
+      :ok = GenBot.begin_async(bot)
+      :ok = GenBot.send_async(bot, "Hello")
 
       assert_receive "hello"
     end
 
-    test "Chat.goto/2 on enter" do
-      MultiMock
+    test "Bot.goto/2 on enter" do
+      MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
-      |> expect(:reply, fn chat, message -> send(chat.data, message) end)
+      |> expect(:reply, fn bot, message -> send(bot.data, message) end)
 
-      expect(MultiFooStateMock, :enter, fn chat ->
-        chat |> Chat.reply_with("transfering") |> Chat.goto(:bar)
+      expect(FooStateMock, :enter, fn bot ->
+        bot |> Bot.reply_with("transfering") |> Bot.goto(:bar)
       end)
 
-      expect(MultiBarStateMock, :enter, fn chat -> Chat.reply_with(chat, "transfered") end)
+      expect(BarStateMock, :enter, fn bot -> Bot.reply_with(bot, "transfered") end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, self(), states: @states)
-      allow(MultiMock, self(), bot)
-      allow(MultiFooStateMock, self(), bot)
-      allow(MultiBarStateMock, self(), bot)
+      {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
+      allow(MultiStateMock, self(), bot)
+      allow(FooStateMock, self(), bot)
+      allow(BarStateMock, self(), bot)
 
-      :ok = Bot.begin_async(bot)
+      :ok = GenBot.begin_async(bot)
 
       assert_receive ["transfering", "transfered"]
     end
 
-    test "Chat.goto/2 when injecting intermediate state" do
-      MultiMock
+    test "Bot.goto/2 when injecting intermediate state" do
+      MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
-      |> expect(:reply, fn chat, message -> send(chat.data, message) end)
+      |> expect(:reply, fn bot, message -> send(bot.data, message) end)
 
-      MultiFooStateMock
-      |> expect(:enter, fn chat -> chat end)
-      |> expect(:on, fn chat, result ->
-        chat |> Chat.reply_with(result) |> Chat.goto(:bar, inject: :qux)
+      FooStateMock
+      |> expect(:enter, fn bot -> bot end)
+      |> expect(:on, fn bot, result ->
+        bot |> Bot.reply_with(result) |> Bot.goto(:bar, inject: :qux)
       end)
       |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
-      expect(MultiQuxStateMock, :enter, fn chat -> Chat.reply_with(chat, "injected") end)
+      expect(QuxStateMock, :enter, fn bot -> Bot.reply_with(bot, "injected") end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, self(), states: @states)
-      allow(MultiMock, self(), bot)
-      allow(MultiFooStateMock, self(), bot)
-      allow(MultiQuxStateMock, self(), bot)
+      {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
+      allow(MultiStateMock, self(), bot)
+      allow(FooStateMock, self(), bot)
+      allow(QuxStateMock, self(), bot)
 
-      :ok = Bot.begin_async(bot)
-      :ok = Bot.send_async(bot, "FOObAr")
+      :ok = GenBot.begin_async(bot)
+      :ok = GenBot.send_async(bot, "FOObAr")
 
       assert_receive "injected"
     end
 
-    test "Chat.goto/2 when injecting intermediate state and continue" do
-      MultiMock
+    test "Bot.goto/2 when injecting intermediate state and continue" do
+      MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
-      |> expect(:reply, fn chat, message -> send(chat.data, message) end)
+      |> expect(:reply, fn bot, message -> send(bot.data, message) end)
 
-      MultiFooStateMock
-      |> expect(:enter, fn chat -> chat end)
-      |> expect(:on, fn chat, _ ->
-        chat |> Chat.reply_with("foo") |> Chat.goto(:bar, inject: :qux)
+      FooStateMock
+      |> expect(:enter, fn bot -> bot end)
+      |> expect(:on, fn bot, _ ->
+        bot |> Bot.reply_with("foo") |> Bot.goto(:bar, inject: :qux)
       end)
       |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
-      expect(MultiBarStateMock, :enter, fn chat -> Chat.reply_with(chat, "bar") end)
+      expect(BarStateMock, :enter, fn bot -> Bot.reply_with(bot, "bar") end)
 
-      expect(MultiQuxStateMock, :enter, fn chat ->
-        chat |> Chat.reply_with("qux") |> Chat.continue()
+      expect(QuxStateMock, :enter, fn bot ->
+        bot |> Bot.reply_with("qux") |> Bot.continue()
       end)
 
-      {:ok, bot} = Bot.start_link(MultiMock, self(), states: @states)
-      allow(MultiMock, self(), bot)
-      allow(MultiFooStateMock, self(), bot)
-      allow(MultiBarStateMock, self(), bot)
-      allow(MultiQuxStateMock, self(), bot)
+      {:ok, bot} = GenBot.start_link(MultiStateMock, self(), states: @states)
+      allow(MultiStateMock, self(), bot)
+      allow(FooStateMock, self(), bot)
+      allow(BarStateMock, self(), bot)
+      allow(QuxStateMock, self(), bot)
 
-      :ok = Bot.begin_async(bot)
-      :ok = Bot.send_async(bot, "anything")
+      :ok = GenBot.begin_async(bot)
+      :ok = GenBot.send_async(bot, "anything")
 
-      assert_receive  ["foo", "qux", "bar"]
+      assert_receive ["foo", "qux", "bar"]
     end
   end
 end

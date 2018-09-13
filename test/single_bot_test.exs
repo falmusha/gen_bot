@@ -1,5 +1,5 @@
-defmodule BotKit.SingleBotTest do
-  alias BotKit.{Bot, Chat, SingleMock}
+defmodule GenBot.SingleBotTest do
+  alias GenBot.{Bot, Bot, SingleStateMock}
 
   use ExUnit.Case
   import Mox
@@ -7,61 +7,61 @@ defmodule BotKit.SingleBotTest do
   setup :verify_on_exit!
 
   test "init/1 callback" do
-    expect(SingleMock, :init, fn :foobar -> {:ok, %{foo: :bar}} end)
+    expect(SingleStateMock, :init, fn :foobar -> {:ok, %{foo: :bar}} end)
 
-    assert {:ok, bot} = Bot.start_link(SingleMock, :foobar)
+    assert {:ok, bot} = GenBot.start_link(SingleStateMock, :foobar)
   end
 
   describe "sync bot" do
-    test "begin_chat/1" do
-      SingleMock
+    test "begin/1" do
+      SingleStateMock
       |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
-      |> expect(:enter, fn chat -> Chat.reply_with(chat, "hi") end)
+      |> expect(:enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
-      {:ok, bot} = Bot.start_link(SingleMock, :ok)
-      allow(SingleMock, self(), bot)
-      assert "hi" = Bot.begin(bot)
+      {:ok, bot} = GenBot.start_link(SingleStateMock, :ok)
+      allow(SingleStateMock, self(), bot)
+      assert "hi" = GenBot.begin(bot)
     end
 
     test "pipeline/1, on/2" do
-      SingleMock
+      SingleStateMock
       |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
       |> expect(:pipeline, fn result -> String.downcase(result) end)
       |> expect(:enter, fn it -> it end)
-      |> expect(:on, fn chat, result -> Chat.reply_with(chat, result) end)
+      |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
 
-      {:ok, bot} = Bot.start_link(SingleMock, :ok)
-      allow(SingleMock, self(), bot)
-      Bot.begin(bot)
-      assert "foobar" = Bot.send(bot, "FOObAr")
+      {:ok, bot} = GenBot.start_link(SingleStateMock, :ok)
+      allow(SingleStateMock, self(), bot)
+      GenBot.begin(bot)
+      assert "foobar" = GenBot.send(bot, "FOObAr")
     end
   end
 
   describe "async bot" do
-    test "begin_chat/1" do
-      SingleMock
+    test "begin/1" do
+      SingleStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
-      |> expect(:reply, fn chat, message -> send(chat.data, message) end)
-      |> expect(:enter, fn chat -> Chat.reply_with(chat, "hi") end)
+      |> expect(:reply, fn bot, message -> send(bot.data, message) end)
+      |> expect(:enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
-      {:ok, bot} = Bot.start_link(SingleMock, self())
-      allow(SingleMock, self(), bot)
-      assert :ok = Bot.begin_async(bot)
+      {:ok, bot} = GenBot.start_link(SingleStateMock, self())
+      allow(SingleStateMock, self(), bot)
+      assert :ok = GenBot.begin_async(bot)
       assert_receive "hi"
     end
 
     test "pipeline/1, on/2" do
-      SingleMock
+      SingleStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
-      |> expect(:reply, 2, fn chat, message -> send(chat.data, message) end)
+      |> expect(:reply, 2, fn bot, message -> send(bot.data, message) end)
       |> expect(:pipeline, fn result -> String.downcase(result) end)
-      |> expect(:enter, fn chat -> Chat.reply_with(chat, "enter") end)
-      |> expect(:on, fn chat, result -> Chat.reply_with(chat, result) end)
+      |> expect(:enter, fn bot -> Bot.reply_with(bot, "enter") end)
+      |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
 
-      {:ok, bot} = Bot.start_link(SingleMock, self())
-      allow(SingleMock, self(), bot)
-      :ok = Bot.begin_async(bot)
-      :ok = Bot.send_async(bot, "FOOBAR")
+      {:ok, bot} = GenBot.start_link(SingleStateMock, self())
+      allow(SingleStateMock, self(), bot)
+      :ok = GenBot.begin_async(bot)
+      :ok = GenBot.send_async(bot, "FOOBAR")
       assert_receive "enter"
       assert_receive "foobar"
     end
