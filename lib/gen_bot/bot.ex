@@ -43,7 +43,7 @@ defmodule GenBot.Bot do
         %{bot | to: to, pending: nil}
 
       state ->
-        pending = %{to: to, wait: true, replies: replies}
+        pending = %{to: to, wait: true, replies: replies, handler: Keyword.get(options, :handler)}
         %{bot | to: state, replies: [], pending: pending}
     end
   end

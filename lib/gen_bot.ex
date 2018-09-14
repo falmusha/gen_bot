@@ -153,8 +153,17 @@ defmodule GenBot do
   defp state_pipeline?(state_module),
     do: function_exported?(state_module, :state_pipeline, 1)
 
-  defp convert(%Bot{pending: %{to: to, wait: false, replies: replies}} = bot, state) do
-    convert(%{bot | pending: nil, to: to, replies: bot.replies ++ replies}, state)
+  defp convert(
+         %Bot{pending: %{to: to, wait: false, replies: replies, handler: handler}} = bot,
+         state
+       ) do
+    bot =
+      case handler do
+        nil -> %{bot | pending: nil, to: to, replies: replies ++ bot.replies}
+        it -> it.(%{bot | pending: nil, to: to, replies:  replies ++ bot.replies})
+      end
+
+    convert(bot, state)
   end
 
   defp convert(%Bot{to: to, event: event} = bot, state) do
