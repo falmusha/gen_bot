@@ -14,7 +14,11 @@ defmodule GenBot do
 
   @callback reply(Bot.t(), String.t()) :: term
 
+  @callback handle_info(message :: term, state :: term, Bot.t()) :: Bot.t()
+
   @callback terminate(reason, state :: term, Bot.t()) :: term
+
+  @optional_callbacks reply: 2, handle_info: 3, terminate: 3
 
   def start(module, args, options \\ []) do
     :gen_statem.start(__MODULE__, {module, args, options}, [])
@@ -70,19 +74,25 @@ defmodule GenBot do
   def handle_event(event_type, :begin, :__dormant__, bot) do
     bot =
       case event_type do
-        {:call, from} -> %{bot | event: :call, reply_pid: from}
-        :cast -> %{bot | event: :cast, reply_pid: nil}
+        {:call, from} -> %{bot | event: :call, from: from}
+        :cast -> %{bot | event: :cast, from: nil}
       end
 
     {:next_state, Keyword.get(bot.options, :states) |> hd |> elem(0), bot}
   end
 
   def handle_event({:call, from}, {:say, text}, state, bot) do
-    handle_say(text, state, %{bot | event: :call, reply_pid: from})
+    handle_say(text, state, %{bot | event: :call, from: from})
   end
 
   def handle_event(:cast, {:say, text}, state, bot) do
-    handle_say(text, state, %{bot | event: :cast, reply_pid: nil})
+    handle_say(text, state, %{bot | event: :cast, from: nil})
+  end
+
+  def handle_event(:info, message, state, %Bot{module: module} = bot) do
+    message
+    |> module.handle_info(state, %{bot | event: :info})
+    |> convert(state)
   end
 
   def terminate(reason, state, %Bot{module: module} = bot) do
@@ -174,48 +184,37 @@ defmodule GenBot do
   end
 
   defp convert(%Bot{to: to, event: event} = bot, state) do
-    actions = []
-
     case {to, event} do
       {nil, _} ->
-        actions = put_reply(actions, bot)
-        bot = %{bot | replies: [], to: nil, reply_pid: nil}
-        {:keep_state, bot, actions}
+        reply = format_reply(bot.replies)
+
+        actions =
+          if bot.from do
+            [{:reply, bot.from, reply}]
+          else
+            bot.module.reply(bot, reply)
+            []
+          end
+
+        {:keep_state, %{bot | replies: [], to: nil, from: nil}, actions}
 
       {^state, _} ->
-        bot = %{bot | to: nil, prev_state: state}
-        {:repeat_state, bot, actions}
+        {:repeat_state, %{bot | to: nil, prev_state: state}, []}
 
       {next, :enter} ->
-        actions = actions ++ [{:timeout, 1, {:next, next}}]
-        bot = %{bot | to: nil, prev_state: state}
-        {:keep_state, bot, actions}
+        {:keep_state, %{bot | to: nil, prev_state: state}, [{:timeout, 1, {:next, next}}]}
 
       {next, _} ->
-        bot = %{bot | to: nil, prev_state: state}
-        {:next_state, next, bot, actions}
+        {:next_state, next, %{bot | to: nil, prev_state: state}, []}
     end
   end
 
-  defp put_reply(actions, %Bot{reply_pid: nil, replies: replies, module: module} = bot) do
+  def format_reply(replies) do
     case replies do
-      [] -> :ok
-      [reply] -> module.reply(bot, reply)
-      it -> module.reply(bot, Enum.reverse(it))
+      [] -> nil
+      [it] -> it
+      it -> Enum.reverse(it)
     end
-
-    actions
-  end
-
-  defp put_reply(actions, %Bot{reply_pid: from, replies: replies}) do
-    reply =
-      case replies do
-        [] -> nil
-        [it] -> it
-        it -> Enum.reverse(it)
-      end
-
-    [{:reply, from, reply} | actions]
   end
 
   defp increment_confused_count(%Bot{confused_count: count} = bot),
