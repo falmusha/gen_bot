@@ -33,6 +33,8 @@ defmodule GenBot.Bot do
     %{bot | replies: [reply | replies]}
   end
 
+  def drop_replies(%__MODULE__{} = bot), do: %{bot | replies: []}
+
   def reset_confused_count(%__MODULE__{} = bot), do: %{bot | confused_count: 0}
 
   defp do_goto(%__MODULE__{} = bot, to, []), do: %{bot | to: to}

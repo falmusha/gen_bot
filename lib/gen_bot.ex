@@ -3,6 +3,8 @@ defmodule GenBot do
 
   @behaviour :gen_statem
 
+  @type reason :: :normal | :shutdown | {:shutdown, term} | term
+
   @callback init(args :: term) ::
               {:ok, data}
               | {:stop, reason :: any}
@@ -11,6 +13,8 @@ defmodule GenBot do
   @callback pipeline(String.t()) :: term
 
   @callback reply(Bot.t(), String.t()) :: term
+
+  @callback terminate(reason, state :: term, Bot.t()) :: term
 
   def start(module, args, options \\ []) do
     :gen_statem.start(__MODULE__, {module, args, options}, [])
@@ -81,6 +85,10 @@ defmodule GenBot do
     handle_say(text, state, %{bot | event: :cast, reply_pid: nil})
   end
 
+  def terminate(reason, state, %Bot{module: module} = bot) do
+    module.terminate(reason, state, bot)
+  end
+
   defp handle_say(text, :__dormant__, bot) do
     next = Keyword.get(bot.options, :states) |> hd |> elem(0)
     {:next_state, next, bot, {:next_event, :cast, {:say, text}}}
@@ -121,27 +129,26 @@ defmodule GenBot do
     end
   end
 
-  defp process_options(module, options) do
-    states =
-      if Keyword.has_key?(options, :states) do
-        options
-        |> Keyword.get(:states)
-        |> Enum.map(fn it ->
-          case it do
-            {_state, {_module, state_options}} = pair when is_list(state_options) ->
-              {:module, _} = Code.ensure_loaded(module)
-              pair
+  defp process_options(module, user_opts) do
+    defaults = [states: [__single__: {module, []}]]
 
-            {state, module} ->
-              {:module, _} = Code.ensure_loaded(module)
-              {state, {module, []}}
-          end
-        end)
-      else
-        [__single__: {module, []}]
+    defaults
+    |> Keyword.merge(user_opts)
+    |> Keyword.update!(:states, &process_state_options/1)
+  end
+
+  defp process_state_options(states) do
+    Enum.map(states, fn it ->
+      case it do
+        {_state, {module, state_options}} = pair when is_list(state_options) ->
+          {:module, _} = Code.ensure_loaded(module)
+          pair
+
+        {state, module} ->
+          {:module, _} = Code.ensure_loaded(module)
+          {state, {module, []}}
       end
-
-    Keyword.put(options, :states, states)
+    end)
   end
 
   defp get_state_module(bot, state),
@@ -160,7 +167,7 @@ defmodule GenBot do
     bot =
       case handler do
         nil -> %{bot | pending: nil, to: to, replies: replies ++ bot.replies}
-        it -> it.(%{bot | pending: nil, to: to, replies:  replies ++ bot.replies})
+        it -> it.(%{bot | pending: nil, to: to, replies: replies ++ bot.replies})
       end
 
     convert(bot, state)
