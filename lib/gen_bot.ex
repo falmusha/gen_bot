@@ -10,7 +10,7 @@ defmodule GenBot do
               | {:stop, reason :: any}
             when data: any
 
-  @callback pipeline(String.t()) :: term
+  @callback pipeline(Bot.t(), String.t()) :: term
 
   @callback reply(Bot.t(), String.t()) :: term
 
@@ -81,6 +81,10 @@ defmodule GenBot do
     {:next_state, Keyword.get(bot.options, :states) |> hd |> elem(0), bot}
   end
 
+  def handle_event(event_type, :begin, _state, _bot) do
+    :keep_state_and_data
+  end
+
   def handle_event({:call, from}, {:say, text}, state, bot) do
     handle_say(text, state, %{bot | event: :call, from: from})
   end
@@ -99,6 +103,10 @@ defmodule GenBot do
     module.terminate(reason, state, bot)
   end
 
+  def format_status(_opt, [_pdict, state, _data]) do
+    state
+  end
+
   defp handle_say(text, :__dormant__, bot) do
     next = Keyword.get(bot.options, :states) |> hd |> elem(0)
     {:next_state, next, bot, {:next_event, :cast, {:say, text}}}
@@ -109,9 +117,9 @@ defmodule GenBot do
 
     detections =
       if single_state?(bot) or not state_pipeline?(state_module) do
-        bot.module.pipeline(text)
+        bot.module.pipeline(bot, text)
       else
-        state_module.state_pipeline(text)
+        state_module.state_pipeline(bot, text)
       end
 
     try do
