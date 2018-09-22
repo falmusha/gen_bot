@@ -24,14 +24,14 @@ defmodule GenBot.Bot do
   def continue(%__MODULE__{pending: %{wait: true} = pending} = bot),
     do: %{bot | pending: %{pending | wait: false}}
 
-  def reply_with(%__MODULE__{replies: replies} = bot, reply) when is_list(reply) do
-    %{bot | replies: Enum.reverse(reply) ++ replies}
-  end
-
   def get_replies(%__MODULE__{replies: replies}), do: replies
 
   def reply_with(%__MODULE__{replies: replies} = bot, reply) when is_binary(reply) do
     %{bot | replies: [reply | replies]}
+  end
+
+  def reply_with(%__MODULE__{replies: replies} = bot, reply) when is_list(reply) do
+    %{bot | replies: Enum.reverse(reply) ++ replies}
   end
 
   def drop_replies(%__MODULE__{} = bot), do: %{bot | replies: []}

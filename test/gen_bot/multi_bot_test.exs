@@ -1,36 +1,39 @@
 defmodule GenBot.MultiBotTest do
-  alias GenBot.{Bot, MultiStateMock, FooStateMock, BarStateMock, QuxStateMock}
+  alias GenBot.{Bot, Test.MultiStateMock, Test.FooStateMock, Test.BarStateMock, Test.QuxStateMock}
 
   use ExUnit.Case
-  import Mox
+  use GenBot.Test.BotCase
 
   @states [foo: FooStateMock, bar: BarStateMock, qux: QuxStateMock]
 
-  setup :verify_on_exit!
-  setup :set_mox_global
-
   test "init/1 callback" do
-    expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+    expect(MultiStateMock, :init, fn :ok -> {:ok, %{}} end)
 
     assert {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
   end
 
   describe "sync bot" do
     test "begin/1" do
-      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+      MultiStateMock
+      |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
+      |> expect(:post_hook, fn bot -> bot end)
+
       expect(FooStateMock, :enter, fn bot -> Bot.reply_with(bot, "hi") end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
       assert "hi" = GenBot.begin(bot)
     end
 
-    test "state_pipeline/1, on/2" do
-      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+    test "pipeline/2, on/2" do
+      MultiStateMock
+      |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
+      |> expect(:pre_hook, fn bot, _input -> bot end)
+      |> expect(:post_hook, 2, fn bot -> bot end)
+      |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
       FooStateMock
       |> expect(:enter, fn bot -> bot end)
       |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
-      |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
       {:ok, bot} = GenBot.start_link(MultiStateMock, :ok, states: @states)
       GenBot.begin(bot)
@@ -38,7 +41,9 @@ defmodule GenBot.MultiBotTest do
     end
 
     test "Bot.goto/2 on enter" do
-      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+      MultiStateMock
+      |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
+      |> expect(:post_hook, 3, fn bot -> bot end)
 
       expect(FooStateMock, :enter, fn bot ->
         bot |> Bot.reply_with("transfering") |> Bot.goto(:bar)
@@ -52,14 +57,17 @@ defmodule GenBot.MultiBotTest do
     end
 
     test "Bot.goto/2 when injecting intermediate state" do
-      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+      MultiStateMock
+      |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
+      |> expect(:pre_hook, fn bot, _input -> bot end)
+      |> expect(:post_hook, 3, fn bot -> bot end)
+      |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
       FooStateMock
       |> expect(:enter, fn bot -> bot end)
       |> expect(:on, fn bot, result ->
         bot |> Bot.reply_with(result) |> Bot.goto(:bar, inject: :qux)
       end)
-      |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
       expect(QuxStateMock, :enter, fn bot -> Bot.reply_with(bot, "injected") end)
 
@@ -70,14 +78,17 @@ defmodule GenBot.MultiBotTest do
     end
 
     test "Bot.goto/2 when injecting intermediate state and continue" do
-      expect(MultiStateMock, :init, fn :ok -> {:ok, %{foo: :bar}} end)
+      MultiStateMock
+      |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
+      |> expect(:pre_hook, fn bot, _input -> bot end)
+      |> expect(:post_hook, 5, fn bot -> bot end)
+      |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
       FooStateMock
       |> expect(:enter, fn bot -> bot end)
       |> expect(:on, fn bot, _ ->
         bot |> Bot.reply_with("foo") |> Bot.goto(:bar, inject: :qux)
       end)
-      |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
       expect(BarStateMock, :enter, fn bot -> Bot.reply_with(bot, "bar") end)
 
@@ -96,6 +107,7 @@ defmodule GenBot.MultiBotTest do
     test "begin/1" do
       MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
+      |> expect(:post_hook, fn bot -> bot end)
       |> expect(:reply, fn bot, message -> send(bot.data, message) end)
 
       expect(FooStateMock, :enter, fn bot -> Bot.reply_with(bot, "hi") end)
@@ -105,13 +117,15 @@ defmodule GenBot.MultiBotTest do
       assert_receive "hi"
     end
 
-    test "state_pipeline/1, on/2" do
+    test "pipeline/2, on/2" do
       MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
+      |> expect(:pre_hook, fn bot, _input -> bot end)
+      |> expect(:post_hook, 2, fn bot -> bot end)
+      |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
       |> expect(:reply, 2, fn bot, message -> send(bot.data, message) end)
 
       FooStateMock
-      |> expect(:state_pipeline, fn result -> String.downcase(result) end)
       |> expect(:enter, fn bot -> bot end)
       |> expect(:on, fn bot, result -> Bot.reply_with(bot, result) end)
 
@@ -126,6 +140,7 @@ defmodule GenBot.MultiBotTest do
     test "Bot.goto/2 on enter" do
       MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
+      |> expect(:post_hook, 3, fn bot -> bot end)
       |> expect(:reply, fn bot, message -> send(bot.data, message) end)
 
       expect(FooStateMock, :enter, fn bot ->
@@ -144,14 +159,16 @@ defmodule GenBot.MultiBotTest do
     test "Bot.goto/2 when injecting intermediate state" do
       MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
+      |> expect(:pre_hook, fn bot, _input -> bot end)
+      |> expect(:post_hook, 3, fn bot -> bot end)
       |> expect(:reply, 2, fn bot, message -> send(bot.data, message) end)
+      |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
       FooStateMock
       |> expect(:enter, fn bot -> bot end)
       |> expect(:on, fn bot, result ->
         bot |> Bot.reply_with(result) |> Bot.goto(:bar, inject: :qux)
       end)
-      |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
       expect(QuxStateMock, :enter, fn bot -> Bot.reply_with(bot, "injected") end)
 
@@ -166,14 +183,16 @@ defmodule GenBot.MultiBotTest do
     test "Bot.goto/2 when injecting intermediate state and continue" do
       MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
+      |> expect(:pre_hook, fn bot, _input -> bot end)
+      |> expect(:post_hook, 5, fn bot -> bot end)
       |> expect(:reply, 2, fn bot, message -> send(bot.data, message) end)
+      |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
       FooStateMock
       |> expect(:enter, fn bot -> bot end)
       |> expect(:on, fn bot, _ ->
         bot |> Bot.reply_with("foo") |> Bot.goto(:bar, inject: :qux)
       end)
-      |> expect(:state_pipeline, fn result -> String.downcase(result) end)
 
       expect(BarStateMock, :enter, fn bot -> Bot.reply_with(bot, "bar") end)
 
