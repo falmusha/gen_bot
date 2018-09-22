@@ -67,7 +67,6 @@ defmodule GenBot.Statem do
   end
 
   def terminate(reason, state, %Bot{module: module} = bot) do
-    IO.inspect(reason)
     module.terminate(reason, state, bot)
   end
 
