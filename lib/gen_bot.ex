@@ -5,12 +5,15 @@ defmodule GenBot do
 
   @type reason :: :normal | :shutdown | {:shutdown, term} | term
 
-  @callback init(args :: term) ::
-              {:ok, data}
-              | {:stop, reason :: any}
-            when data: any
+  @type data :: term
+
+  @callback init(args :: term) :: {:ok, data} | {:stop, reason :: any}
 
   @callback pipeline(Bot.t(), String.t()) :: term
+
+  @callback pre_hook(Bot.t(), String.t()) :: Bot.t()
+
+  @callback post_hook(Bot.t()) :: Bot.t()
 
   @callback reply(Bot.t(), String.t()) :: term
 
@@ -18,7 +21,7 @@ defmodule GenBot do
 
   @callback terminate(reason, state :: term, Bot.t()) :: term
 
-  @optional_callbacks reply: 2, handle_info: 3, terminate: 3
+  @optional_callbacks pre_hook: 2, post_hook: 1, reply: 2, handle_info: 3, terminate: 3
 
   def start(module, args, options \\ []) do
     :gen_statem.start(__MODULE__, {module, args, options}, [])
@@ -115,6 +118,13 @@ defmodule GenBot do
   defp handle_say(text, state, bot) do
     state_module = get_state_module(bot, state)
 
+    bot =
+      if function_exported?(bot.module, :pre_hook, 2) do
+        bot.module.pre_hook(bot, text)
+      else
+        bot
+      end
+
     detections =
       if single_state?(bot) or not state_pipeline?(state_module) do
         bot.module.pipeline(bot, text)
@@ -191,7 +201,14 @@ defmodule GenBot do
     convert(bot, state)
   end
 
-  defp convert(%Bot{to: to, event: event} = bot, state) do
+  defp convert(%Bot{module: module, data: data, to: to, event: event} = bot, state) do
+    bot =
+      if function_exported?(module, :post_hook, 1) do
+        module.post_hook(bot)
+      else
+        bot
+      end
+
     case {to, event} do
       {nil, _} ->
         reply = format_reply(bot.replies)

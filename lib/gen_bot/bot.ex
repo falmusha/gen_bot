@@ -28,6 +28,8 @@ defmodule GenBot.Bot do
     %{bot | replies: Enum.reverse(reply) ++ replies}
   end
 
+  def get_replies(%__MODULE__{replies: replies}), do: replies
+
   def reply_with(%__MODULE__{replies: replies} = bot, reply) when is_binary(reply) do
     %{bot | replies: [reply | replies]}
   end
