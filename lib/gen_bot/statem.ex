@@ -8,15 +8,18 @@ defmodule GenBot.Statem do
   def init({module, args, options}) do
     options = process_options(module, options)
 
-    {pdata, initial_state} =
-      case module.init(args) do
-        {:ok, pdata} -> {pdata, :__dormant__}
-        {:ok, pdata, state} -> {pdata, state}
-      end
+    case module.init(args) do
+      {:ok, %Bot{} = bot} ->
+        {:ok, bot.current_state, %{bot | prev_state: :__dormant__}}
 
-    bot = %Bot{module: module, data: pdata, prev_state: :__dormant__, options: options}
+      {:ok, pdata} ->
+        {:ok, :__dormant__,
+         %Bot{module: module, data: pdata, prev_state: :__dormant__, options: options}}
 
-    {:ok, initial_state, bot}
+      {:ok, pdata, state} ->
+        {:ok, state,
+         %Bot{module: module, data: pdata, prev_state: :__dormant__, options: options}}
+    end
   end
 
   def handle_event(:enter, :__dormant__, :__dormant__, _bot), do: :keep_state_and_data
@@ -166,15 +169,9 @@ defmodule GenBot.Statem do
   end
 
   defp convert(%Bot{module: module, to: to, event: event} = bot, state) do
-    bot =
-      if function_exported?(module, :post_hook, 1) do
-        module.post_hook(bot)
-      else
-        bot
-      end
-
     case {to, event} do
       {nil, _} ->
+        bot = do_post_hook(module, bot)
         reply = format_reply(bot.replies)
 
         actions =
@@ -185,20 +182,21 @@ defmodule GenBot.Statem do
             []
           end
 
-        {:keep_state, %{bot | replies: [], to: nil, from: nil}, actions}
+        {:keep_state, %{bot | current_state: state, replies: [], to: nil, from: nil}, actions}
 
       {^state, _} ->
-        {:repeat_state, %{bot | to: nil, prev_state: state}, []}
+        {:repeat_state, %{bot | current_state: state, prev_state: state, to: nil}, []}
 
       {next, :enter} ->
-        {:keep_state, %{bot | to: nil, prev_state: state}, [{:timeout, 1, {:next, next}}]}
+        actions = [{:timeout, 1, {:next, next}}]
+        {:keep_state, %{bot | current_state: state, prev_state: state, to: nil}, actions}
 
       {next, _} ->
-        {:next_state, next, %{bot | to: nil, prev_state: state}, []}
+        {:next_state, next, %{bot | current_state: state, prev_state: state, to: nil}, []}
     end
   end
 
-  def format_reply(replies) do
+  defp format_reply(replies) do
     case replies do
       [] -> nil
       [it] -> it
@@ -210,4 +208,12 @@ defmodule GenBot.Statem do
     do: %{bot | confused_count: count + 1}
 
   defp reset_confused_count(%Bot{} = bot), do: %{bot | confused_count: 0}
+
+  defp do_post_hook(module, bot) do
+    if function_exported?(module, :post_hook, 1) do
+      module.post_hook(bot)
+    else
+      bot
+    end
+  end
 end

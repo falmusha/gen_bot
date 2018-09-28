@@ -6,6 +6,7 @@ defmodule GenBot.Bot do
     :to,
     :event,
     :from,
+    :current_state,
     :prev_state,
     :options,
     :pending,
@@ -20,6 +21,9 @@ defmodule GenBot.Bot do
   def goto(%__MODULE__{} = bot, to, options \\ []), do: do_goto(bot, to, options)
 
   def prev_state(%__MODULE__{prev_state: it}), do: it
+
+  def in_injected_state?(%__MODULE__{pending: nil}), do: false
+  def in_injected_state?(%__MODULE__{pending: _}), do: true
 
   def continue(%__MODULE__{pending: %{wait: true} = pending} = bot),
     do: %{bot | pending: %{pending | wait: false}}

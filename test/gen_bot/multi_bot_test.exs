@@ -43,7 +43,7 @@ defmodule GenBot.MultiBotTest do
     test "Bot.goto/2 on enter" do
       MultiStateMock
       |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
-      |> expect(:post_hook, 3, fn bot -> bot end)
+      |> expect(:post_hook, 1, fn bot -> bot end)
 
       expect(FooStateMock, :enter, fn bot ->
         bot |> Bot.reply_with("transfering") |> Bot.goto(:bar)
@@ -60,7 +60,7 @@ defmodule GenBot.MultiBotTest do
       MultiStateMock
       |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
       |> expect(:pre_hook, fn bot, _input -> bot end)
-      |> expect(:post_hook, 3, fn bot -> bot end)
+      |> expect(:post_hook, 2, fn bot -> bot end)
       |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
       FooStateMock
@@ -81,7 +81,7 @@ defmodule GenBot.MultiBotTest do
       MultiStateMock
       |> expect(:init, fn :ok -> {:ok, %{foo: :bar}} end)
       |> expect(:pre_hook, fn bot, _input -> bot end)
-      |> expect(:post_hook, 5, fn bot -> bot end)
+      |> expect(:post_hook, 2, fn bot -> bot end)
       |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
       FooStateMock
@@ -140,7 +140,7 @@ defmodule GenBot.MultiBotTest do
     test "Bot.goto/2 on enter" do
       MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
-      |> expect(:post_hook, 3, fn bot -> bot end)
+      |> expect(:post_hook, 1, fn bot -> bot end)
       |> expect(:reply, fn bot, message -> send(bot.data, message) end)
 
       expect(FooStateMock, :enter, fn bot ->
@@ -160,7 +160,7 @@ defmodule GenBot.MultiBotTest do
       MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
       |> expect(:pre_hook, fn bot, _input -> bot end)
-      |> expect(:post_hook, 3, fn bot -> bot end)
+      |> expect(:post_hook, 2, fn bot -> bot end)
       |> expect(:reply, 2, fn bot, message -> send(bot.data, message) end)
       |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
@@ -184,7 +184,7 @@ defmodule GenBot.MultiBotTest do
       MultiStateMock
       |> expect(:init, fn test_pid -> {:ok, test_pid} end)
       |> expect(:pre_hook, fn bot, _input -> bot end)
-      |> expect(:post_hook, 5, fn bot -> bot end)
+      |> expect(:post_hook, 2, fn bot -> bot end)
       |> expect(:reply, 2, fn bot, message -> send(bot.data, message) end)
       |> expect(:pipeline, fn _bot, result -> String.downcase(result) end)
 
