@@ -22,6 +22,8 @@ defmodule GenBot.Bot do
 
   def prev_state(%__MODULE__{prev_state: it}), do: it
 
+  def next_state(%__MODULE__{to: it}), do: it
+
   def in_injected_state?(%__MODULE__{pending: nil}), do: false
   def in_injected_state?(%__MODULE__{pending: _}), do: true
 
