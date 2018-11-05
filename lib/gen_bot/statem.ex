@@ -149,11 +149,15 @@ defmodule GenBot.Statem do
   defp get_state_module(bot, state),
     do: bot.options |> Keyword.get(:states) |> Keyword.get(state) |> elem(0)
 
-  defp single_state?(%Bot{options: [states: states]}) when length(states) > 1, do: false
-  defp single_state?(_), do: true
+  defp single_state?(%Bot{options: options}) do
+    options
+    |> Keyword.get(:states, [])
+    |> length()
+    |> Kernel.==(1)
+  end
 
   defp state_pipeline?(state_module),
-    do: function_exported?(state_module, :state_pipeline, 1)
+    do: function_exported?(state_module, :state_pipeline, 2)
 
   defp convert(
          %Bot{pending: %{to: to, wait: false, replies: replies, handler: handler}} = bot,

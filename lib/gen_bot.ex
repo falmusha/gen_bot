@@ -19,7 +19,12 @@ defmodule GenBot do
 
   @callback terminate(reason, state :: term, Bot.t()) :: term
 
-  @optional_callbacks pre_hook: 2, post_hook: 1, reply: 2, handle_info: 3, terminate: 3
+  @optional_callbacks pre_hook: 2,
+                      post_hook: 1,
+                      pipeline: 2,
+                      reply: 2,
+                      handle_info: 3,
+                      terminate: 3
 
   def start(module, args, options \\ []) do
     :gen_statem.start(Statem, {module, args, options}, [])
